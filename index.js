@@ -195,7 +195,10 @@ const httpServer = http.createServer(async (req, res) => {
   if (pathname === "/mcp") {
     if (AUTH_KEY) {
       const authHeader = req.headers["authorization"] || "";
-      if (authHeader !== `Bearer ${AUTH_KEY}`) {
+      const queryKey = url.searchParams.get("auth") || "";
+      const validBearer = authHeader === `Bearer ${AUTH_KEY}`;
+      const validQuery  = queryKey === AUTH_KEY;
+      if (!validBearer && !validQuery) {
         console.error(`[AUTH] Rejected request from ${req.socket.remoteAddress}`);
         res.writeHead(401, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ error: "Unauthorized" }));

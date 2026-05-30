@@ -50,8 +50,7 @@ Claude Desktop connects to remote MCP servers via the `mcp-remote` proxy. Add th
   "mcpServers": {
     "ashi-diamonds": {
       "command": "npx",
-      "args": ["-y", "mcp-remote", "https://ashi-mcp.hilexservices.com/mcp",
-               "--header", "Authorization: Bearer YOUR_AUTH_KEY"]
+      "args": ["-y", "mcp-remote", "https://ashi-mcp.hilexservices.com/mcp?auth=YOUR_AUTH_KEY"]
     }
   }
 }
@@ -63,14 +62,15 @@ Claude Desktop connects to remote MCP servers via the `mcp-remote` proxy. Add th
   "mcpServers": {
     "ashi-diamonds": {
       "command": "npx",
-      "args": ["-y", "mcp-remote", "http://<host-ip>:3030/mcp",
-               "--allow-http", "--header", "Authorization: Bearer YOUR_AUTH_KEY"]
+      "args": ["-y", "mcp-remote", "http://<host-ip>:3030/mcp?auth=YOUR_AUTH_KEY", "--allow-http"]
     }
   }
 }
 ```
 
 Replace `YOUR_AUTH_KEY` with the value set in `AUTH_KEY` on the server.
+
+The auth key can also be passed as a Bearer token header (`Authorization: Bearer KEY`) for API clients that prefer that approach.
 
 > **Note:** If `AUTH_KEY` is not set on the server, the `/mcp` endpoint is open to anyone. Always set it in production.
 
