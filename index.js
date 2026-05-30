@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
-import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import fetch from "node-fetch";
 import http from "http";
@@ -158,18 +158,26 @@ function createMCPServer() {
   return server;
 }
 
-// ── Session store ─────────────────────────────────────────────────────────────
-const sessions = new Map(); // sessionId → SSEServerTransport
+// ── Body parser helper ────────────────────────────────────────────────────────
+function parseBody(req) {
+  return new Promise((resolve) => {
+    let data = "";
+    req.on("data", (chunk) => (data += chunk));
+    req.on("end", () => {
+      try { resolve(JSON.parse(data)); }
+      catch { resolve(null); }
+    });
+  });
+}
 
 // ── HTTP server ───────────────────────────────────────────────────────────────
 const httpServer = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://localhost`);
   const pathname = url.pathname;
 
-  // CORS headers (useful when called from browser-based apps)
   res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, mcp-session-id");
 
   if (req.method === "OPTIONS") {
     res.writeHead(204);
@@ -177,46 +185,20 @@ const httpServer = http.createServer(async (req, res) => {
     return;
   }
 
-  // ── Health check ────────────────────────────────────────────────────────────
   if (req.method === "GET" && pathname === "/health") {
     res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ status: "ok", server: "ashi-diamonds-mcp", tools: TOOLS.length, sessions: sessions.size }));
+    res.end(JSON.stringify({ status: "ok", server: "ashi-diamonds-mcp", tools: TOOLS.length }));
     return;
   }
 
-  // ── SSE: client connects here first ────────────────────────────────────────
-  if (req.method === "GET" && pathname === "/sse") {
-    console.error(`[SSE] New connection from ${req.socket.remoteAddress}`);
-
-    const transport = new SSEServerTransport("/message", res);
+  if (pathname === "/mcp") {
+    console.error(`[MCP] ${req.method} from ${req.socket.remoteAddress}`);
+    const body = req.method === "POST" ? await parseBody(req) : undefined;
     const server = createMCPServer();
-
-    sessions.set(transport.sessionId, transport);
-    console.error(`[SSE] Session created: ${transport.sessionId}`);
-
-    req.on("close", () => {
-      sessions.delete(transport.sessionId);
-      console.error(`[SSE] Session closed: ${transport.sessionId}`);
-    });
-
+    const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
+    res.on("close", () => server.close().catch(() => {}));
     await server.connect(transport);
-    return;
-  }
-
-  // ── Messages: client POSTs tool calls here ─────────────────────────────────
-  if (req.method === "POST" && pathname === "/message") {
-    const sessionId = url.searchParams.get("sessionId");
-    console.error(`[MSG] sessionId=${sessionId}`);
-
-    const transport = sessions.get(sessionId);
-    if (!transport) {
-      console.error(`[MSG] Session not found: ${sessionId}`);
-      res.writeHead(404, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: "Session not found", sessionId }));
-      return;
-    }
-
-    await transport.handlePostMessage(req, res);
+    await transport.handleRequest(req, res, body);
     return;
   }
 
@@ -225,7 +207,7 @@ const httpServer = http.createServer(async (req, res) => {
 });
 
 httpServer.listen(PORT, "0.0.0.0", () => {
-  console.error(`✅ Ashi Diamonds MCP server listening on http://0.0.0.0:${PORT}`);
-  console.error(`   SSE:    http://0.0.0.0:${PORT}/sse`);
-  console.error(`   Health: http://0.0.0.0:${PORT}/health`);
+  console.error(`Ashi Diamonds MCP server listening on http://0.0.0.0:${PORT}`);
+  console.error(`  MCP endpoint: http://0.0.0.0:${PORT}/mcp`);
+  console.error(`  Health check: http://0.0.0.0:${PORT}/health`);
 });
