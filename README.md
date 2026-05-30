@@ -44,19 +44,38 @@ Defaults to port `3000`. Override with `PORT=xxxx`.
 
 Claude Desktop connects to remote MCP servers via the `mcp-remote` proxy. Add the following to your `claude_desktop_config.json`:
 
-**HTTPS (recommended):**
+**Windows (HTTPS):**
 ```json
 {
   "mcpServers": {
     "ashi-diamonds": {
-      "command": "npx",
-      "args": ["-y", "mcp-remote", "https://ashi-mcp.hilexservices.com/mcp?auth=YOUR_AUTH_KEY"]
+      "command": "powershell",
+      "args": [
+        "-NonInteractive",
+        "-c",
+        "npx -y mcp-remote https://ashi-mcp.hilexservices.com/mcp --header 'Authorization: Bearer YOUR_AUTH_KEY'"
+      ]
     }
   }
 }
 ```
 
-**Plain HTTP (local network only):**
+> PowerShell is required on Windows because `cmd.exe` misparses paths containing spaces (`C:\Program Files\nodejs`) when the command line includes a `--header` argument. PowerShell handles this correctly and passes the Bearer token as a single literal argument.
+
+**macOS / Linux (HTTPS):**
+```json
+{
+  "mcpServers": {
+    "ashi-diamonds": {
+      "command": "npx",
+      "args": ["-y", "mcp-remote", "https://ashi-mcp.hilexservices.com/mcp",
+               "--header", "Authorization: Bearer YOUR_AUTH_KEY"]
+    }
+  }
+}
+```
+
+**Plain HTTP fallback (local network, any OS):**
 ```json
 {
   "mcpServers": {
@@ -69,8 +88,6 @@ Claude Desktop connects to remote MCP servers via the `mcp-remote` proxy. Add th
 ```
 
 Replace `YOUR_AUTH_KEY` with the value set in `AUTH_KEY` on the server.
-
-The auth key can also be passed as a Bearer token header (`Authorization: Bearer KEY`) for API clients that prefer that approach.
 
 > **Note:** If `AUTH_KEY` is not set on the server, the `/mcp` endpoint is open to anyone. Always set it in production.
 
