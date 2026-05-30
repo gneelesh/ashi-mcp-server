@@ -49,13 +49,15 @@ Claude Desktop connects to remote MCP servers via the `mcp-remote` proxy. Add th
   "mcpServers": {
     "ashi-diamonds": {
       "command": "npx",
-      "args": ["-y", "mcp-remote", "http://<host-ip>:3030/mcp"]
+      "args": ["-y", "mcp-remote", "http://<host-ip>:3030/mcp", "--allow-http"]
     }
   }
 }
 ```
 
 Replace `<host-ip>` with the IP address of the machine running the server (e.g. `192.168.88.151`).
+
+> **Note:** `--allow-http` is required because `mcp-remote` blocks plain HTTP for non-localhost addresses by default. If you set up HTTPS on the server, you can remove this flag.
 
 `claude_desktop_config.json` is located at:
 - **Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
