@@ -2,10 +2,7 @@
 
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
-import {
-  CallToolRequestSchema,
-  ListToolsRequestSchema,
-} from "@modelcontextprotocol/sdk/types.js";
+import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import fetch from "node-fetch";
 import http from "http";
 
@@ -13,12 +10,13 @@ const BASE_URL = "https://aichatbot.ashidiamonds.com";
 const PORT = process.env.PORT || 3000;
 
 const CREDENTIALS = {
-  jewelerid:   process.env.ASHI_JEWELER_ID || "CARTJA11720",
-  userName:    process.env.ASHI_USERNAME   || "avalontester1@gmail.com",
-  password:    process.env.ASHI_PASSWORD   || "",
+  jewelerid:   process.env.ASHI_JEWELER_ID  || "CARTJA11720",
+  userName:    process.env.ASHI_USERNAME    || "avalontester1@gmail.com",
+  password:    process.env.ASHI_PASSWORD    || "",
   jewelsoftid: process.env.ASHI_JEWELSOFTID || "",
 };
 
+// ── Token cache ───────────────────────────────────────────────────────────────
 let cachedToken = null;
 
 async function getToken() {
@@ -42,66 +40,64 @@ async function getToken() {
 }
 
 async function apiFetch(path, method = "GET", body = undefined) {
+  console.error(`[API] ${method} ${path}`);
   const token = await getToken();
   const opts = {
     method,
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
   };
   if (body !== undefined) opts.body = JSON.stringify(body);
   const res = await fetch(`${BASE_URL}${path}`, opts);
   if (res.status === 401) {
     cachedToken = null;
-    const retryToken = await getToken();
-    opts.headers.Authorization = `Bearer ${retryToken}`;
-    const retry = await fetch(`${BASE_URL}${path}`, opts);
-    return retry.json();
+    opts.headers.Authorization = `Bearer ${await getToken()}`;
+    return (await fetch(`${BASE_URL}${path}`, opts)).json();
   }
   return res.json();
 }
 
+// ── Tools ─────────────────────────────────────────────────────────────────────
 const TOOLS = [
-  { name: "login", description: "Login to Ashi Diamonds API and get a JWT token.", inputSchema: { type: "object", properties: {} } },
+  { name: "login", description: "Login to Ashi Diamonds API and refresh the JWT token.", inputSchema: { type: "object", properties: {} } },
   { name: "search_products", description: "Search and filter products by keyword, price range, and sort order.", inputSchema: { type: "object", properties: { keywords: { type: "string" }, pricemin: { type: "number" }, pricemax: { type: "number" }, orderby: { type: "integer" }, pagesize: { type: "integer" } } } },
   { name: "get_product_details", description: "Get detailed info for a single product by style ID.", inputSchema: { type: "object", required: ["style_id"], properties: { style_id: { type: "string" } } } },
   { name: "get_product_details_bulk", description: "Get details for multiple products by comma-separated style IDs.", inputSchema: { type: "object", required: ["style_ids"], properties: { style_ids: { type: "string" } } } },
   { name: "get_product_specifications", description: "Get metal color, karat, diamond weight, quality specs by style ID.", inputSchema: { type: "object", required: ["style_id"], properties: { style_id: { type: "string" } } } },
   { name: "get_product_measurements", description: "Get product measurements by style ID.", inputSchema: { type: "object", required: ["style_id"], properties: { style_id: { type: "string" } } } },
-  { name: "get_product_variants", description: "Get available variants of a style (metal color, karat, diamond quality, etc.)", inputSchema: { type: "object", required: ["style_id"], properties: { style_id: { type: "string" } } } },
-  { name: "get_related_products", description: "Get related products for cross-sell/upsell by style ID.", inputSchema: { type: "object", required: ["style_id"], properties: { style_id: { type: "string" } } } },
+  { name: "get_product_variants", description: "Get available variants of a style.", inputSchema: { type: "object", required: ["style_id"], properties: { style_id: { type: "string" } } } },
+  { name: "get_related_products", description: "Get related products for a style ID.", inputSchema: { type: "object", required: ["style_id"], properties: { style_id: { type: "string" } } } },
   { name: "get_similar_styles", description: "Get visually similar products to a given style ID.", inputSchema: { type: "object", required: ["style_id"], properties: { style_id: { type: "string" } } } },
-  { name: "get_style_history", description: "Get full history of a style: orders, memos, purchases, stock.", inputSchema: { type: "object", required: ["style_id"], properties: { style_id: { type: "string" } } } },
-  { name: "check_inventory_status", description: "Check inventory status and availability for a product.", inputSchema: { type: "object", required: ["style_id"], properties: { style_id: { type: "string" }, quantity: { type: "integer" } } } },
+  { name: "get_style_history", description: "Get full order/memo/stock history of a style ID.", inputSchema: { type: "object", required: ["style_id"], properties: { style_id: { type: "string" } } } },
+  { name: "check_inventory_status", description: "Check inventory availability for a product.", inputSchema: { type: "object", required: ["style_id"], properties: { style_id: { type: "string" }, quantity: { type: "integer" } } } },
   { name: "get_recently_viewed", description: "Get recently viewed products for the logged-in user.", inputSchema: { type: "object", properties: {} } },
-  { name: "get_cart", description: "Retrieve all items in the retailer order cart.", inputSchema: { type: "object", properties: {} } },
+  { name: "get_cart", description: "Retrieve all items in the order cart.", inputSchema: { type: "object", properties: {} } },
   { name: "add_to_cart", description: "Add one or more products to the order cart.", inputSchema: { type: "object", required: ["items"], properties: { items: { type: "array", items: { type: "object", properties: { style_id: { type: "string" }, quantity: { type: "integer" } } } } } } },
   { name: "get_order_fields", description: "Get required fields needed to place an order.", inputSchema: { type: "object", properties: {} } },
-  { name: "submit_order_fields", description: "Submit PO number, shipping address, and method to prepare order.", inputSchema: { type: "object", properties: { poNumber: { type: "string" }, poShipDate: { type: "string" }, poCancelDate: { type: "string" }, shippingMethod: { type: "string" }, shippingDBA: { type: "string" }, orderComment: { type: "string" } } } },
-  { name: "place_order", description: "Finalize and submit the order from the cart.", inputSchema: { type: "object", properties: {} } },
-  { name: "get_order_status", description: "Check order status by PO number, Ashi order number, date range, or status.", inputSchema: { type: "object", properties: { ashi_order_no: { type: "string" }, po_no: { type: "string" }, web_ref_no: { type: "string" }, order_status: { type: "string" }, start_date: { type: "string" }, end_date: { type: "string" } } } },
-  { name: "get_wishlist", description: "Get all items in the user wishlist.", inputSchema: { type: "object", properties: {} } },
-  { name: "add_to_wishlist", description: "Add one or more style IDs to the wishlist.", inputSchema: { type: "object", required: ["items"], properties: { items: { type: "array", items: { type: "object", properties: { style_id: { type: "string" }, quantity: { type: "integer" } } } } } } },
+  { name: "submit_order_fields", description: "Submit PO number, shipping details to prepare the order.", inputSchema: { type: "object", properties: { poNumber: { type: "string" }, poShipDate: { type: "string" }, poCancelDate: { type: "string" }, shippingMethod: { type: "string" }, shippingDBA: { type: "string" }, orderComment: { type: "string" } } } },
+  { name: "place_order", description: "Finalize and submit the order.", inputSchema: { type: "object", properties: {} } },
+  { name: "get_order_status", description: "Check order status by PO, Ashi order number, date range, or status.", inputSchema: { type: "object", properties: { ashi_order_no: { type: "string" }, po_no: { type: "string" }, web_ref_no: { type: "string" }, order_status: { type: "string" }, start_date: { type: "string" }, end_date: { type: "string" } } } },
+  { name: "get_wishlist", description: "Get all wishlist items.", inputSchema: { type: "object", properties: {} } },
+  { name: "add_to_wishlist", description: "Add style IDs to the wishlist.", inputSchema: { type: "object", required: ["items"], properties: { items: { type: "array", items: { type: "object", properties: { style_id: { type: "string" }, quantity: { type: "integer" } } } } } } },
   { name: "wishlist_to_cart", description: "Move all wishlist items to the order cart.", inputSchema: { type: "object", properties: {} } },
-  { name: "get_sales_quotations", description: "Get all sales quotations for the logged-in user.", inputSchema: { type: "object", properties: {} } },
-  { name: "get_sales_quotation_detail", description: "Get full detail of a specific sales quotation by ID.", inputSchema: { type: "object", required: ["sqid"], properties: { sqid: { type: "string" } } } },
-  { name: "create_sales_quotation", description: "Create a new sales quotation with optional style IDs.", inputSchema: { type: "object", properties: { quotationName: { type: "string" }, products: { type: "array", items: { type: "object", properties: { style_id: { type: "string" }, quantity: { type: "integer" } } } } } } },
+  { name: "get_sales_quotations", description: "Get all sales quotations for the user.", inputSchema: { type: "object", properties: {} } },
+  { name: "get_sales_quotation_detail", description: "Get detail of a specific sales quotation.", inputSchema: { type: "object", required: ["sqid"], properties: { sqid: { type: "string" } } } },
+  { name: "create_sales_quotation", description: "Create a new sales quotation.", inputSchema: { type: "object", properties: { quotationName: { type: "string" }, products: { type: "array", items: { type: "object", properties: { style_id: { type: "string" }, quantity: { type: "integer" } } } } } } },
   { name: "add_items_to_quotation", description: "Add style IDs to an existing sales quotation.", inputSchema: { type: "object", required: ["quotationid", "products"], properties: { quotationid: { type: "integer" }, products: { type: "array", items: { type: "object", properties: { style_id: { type: "string" }, quantity: { type: "integer" } } } }, comment: { type: "string" } } } },
-  { name: "remove_items_from_quotation", description: "Remove style IDs from an existing sales quotation.", inputSchema: { type: "object", required: ["quotationid", "products"], properties: { quotationid: { type: "integer" }, products: { type: "array", items: { type: "object", properties: { style_id: { type: "string" } } } } } } },
-  { name: "quotation_to_cart", description: "Move all items from a sales quotation to the order cart.", inputSchema: { type: "object", required: ["quotationid"], properties: { quotationid: { type: "integer" } } } },
-  { name: "get_custom_quote_options", description: "Get customization options for a custom quote (general or by style ID).", inputSchema: { type: "object", properties: { style_id: { type: "string" } } } },
-  { name: "create_custom_quote", description: "Submit a custom quote request with customizations.", inputSchema: { type: "object", properties: { style_id: { type: "string" }, customization_type: { type: "array", items: { type: "string" } }, selected_options: { type: "object", properties: { "Metal Karat": { type: "string" }, "Metal Color": { type: "string" }, Size: { type: "number" } } }, costBudget: { type: "number" }, comments: { type: "string" } } } },
-  { name: "get_special_order_options", description: "Get special order options (size, metal color, karat) for a style ID.", inputSchema: { type: "object", properties: { style_id: { type: "string" } } } },
-  { name: "check_special_order_variant", description: "Check availability of a special order variant including pricing.", inputSchema: { type: "object", properties: { base_style_id: { type: "string" }, size: { type: "number" }, metal_color: { type: "string" }, metal_karat: { type: "string" }, comments: { type: "string" } } } },
-  { name: "add_special_order_to_cart", description: "Add special order items to the cart with custom attributes.", inputSchema: { type: "object", required: ["spoOrderProductdata"], properties: { spoOrderProductdata: { type: "array", items: { type: "object" } } } } },
+  { name: "remove_items_from_quotation", description: "Remove style IDs from a sales quotation.", inputSchema: { type: "object", required: ["quotationid", "products"], properties: { quotationid: { type: "integer" }, products: { type: "array", items: { type: "object", properties: { style_id: { type: "string" } } } } } } },
+  { name: "quotation_to_cart", description: "Move a sales quotation to the order cart.", inputSchema: { type: "object", required: ["quotationid"], properties: { quotationid: { type: "integer" } } } },
+  { name: "get_custom_quote_options", description: "Get customization options for a custom quote.", inputSchema: { type: "object", properties: { style_id: { type: "string" } } } },
+  { name: "create_custom_quote", description: "Submit a custom quote request.", inputSchema: { type: "object", properties: { style_id: { type: "string" }, customization_type: { type: "array", items: { type: "string" } }, selected_options: { type: "object" }, costBudget: { type: "number" }, comments: { type: "string" } } } },
+  { name: "get_special_order_options", description: "Get special order options for a style.", inputSchema: { type: "object", properties: { style_id: { type: "string" } } } },
+  { name: "check_special_order_variant", description: "Check availability of a special order variant.", inputSchema: { type: "object", properties: { base_style_id: { type: "string" }, size: { type: "number" }, metal_color: { type: "string" }, metal_karat: { type: "string" }, comments: { type: "string" } } } },
+  { name: "add_special_order_to_cart", description: "Add special order items to the cart.", inputSchema: { type: "object", required: ["spoOrderProductdata"], properties: { spoOrderProductdata: { type: "array", items: { type: "object" } } } } },
   { name: "get_email_fields", description: "Get required fields for sending style details via email.", inputSchema: { type: "object", properties: {} } },
   { name: "send_style_email", description: "Send product style details to a customer via email.", inputSchema: { type: "object", properties: { style_id: { type: "string" }, customerName: { type: "string" }, customerEmail: { type: "string" }, subjectLine: { type: "string" }, comments: { type: "string" } } } },
-  { name: "get_ppcc_id", description: "Retrieve Catalog, POS, and Program data by Program ID.", inputSchema: { type: "object", properties: {} } },
+  { name: "get_ppcc_id", description: "Retrieve Catalog, POS, and Program data.", inputSchema: { type: "object", properties: {} } },
   { name: "get_products_by_ppcc", description: "Fetch products by PPCC ID.", inputSchema: { type: "object", required: ["ppcc_id"], properties: { ppcc_id: { type: "string" } } } },
 ];
 
 async function handleTool(name, args) {
+  console.error(`[TOOL] ${name}`);
   switch (name) {
     case "login": cachedToken = null; await getToken(); return { success: true, message: "Login successful." };
     case "search_products": return apiFetch("/api/products/search", "POST", args);
@@ -143,14 +139,15 @@ async function handleTool(name, args) {
   }
 }
 
+// ── MCP server factory ────────────────────────────────────────────────────────
 function createMCPServer() {
   const server = new Server(
     { name: "ashi-diamonds", version: "1.0.0" },
     { capabilities: { tools: {} } }
   );
   server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: TOOLS }));
-  server.setRequestHandler(CallToolRequestSchema, async (request) => {
-    const { name, arguments: args } = request.params;
+  server.setRequestHandler(CallToolRequestSchema, async (req) => {
+    const { name, arguments: args } = req.params;
     try {
       const result = await handleTool(name, args ?? {});
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
@@ -161,76 +158,65 @@ function createMCPServer() {
   return server;
 }
 
-// ── HTTP server with SSE transport ────────────────────────────────────────────
+// ── Session store ─────────────────────────────────────────────────────────────
+const sessions = new Map(); // sessionId → SSEServerTransport
+
+// ── HTTP server ───────────────────────────────────────────────────────────────
 const httpServer = http.createServer(async (req, res) => {
-  // Health check
-  if (req.method === "GET" && req.url === "/health") {
-    res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ status: "ok", server: "ashi-diamonds-mcp" }));
-    return;
-  }
-
-  // SSE endpoint — each connection gets its own MCP server instance
-  if (req.method === "GET" && req.url === "/sse") {
-    console.error(`[SSE] New connection from ${req.socket.remoteAddress}`);
-    const server = createMCPServer();
-    const transport = new SSEServerTransport("/message", res);
-    await server.connect(transport);
-    return;
-  }
-
-  // Message endpoint — receives POST messages from the SSE client
-  if (req.method === "POST" && req.url === "/message") {
-    // The SSEServerTransport handles this internally via the session
-    // We need to route to the right transport by sessionId
-    const sessionId = new URL(req.url, `http://localhost`).searchParams.get("sessionId");
-    if (sessionId && activeSessions.has(sessionId)) {
-      activeSessions.get(sessionId).handlePostMessage(req, res);
-    } else {
-      res.writeHead(404);
-      res.end("Session not found");
-    }
-    return;
-  }
-
-  res.writeHead(404);
-  res.end("Not found");
-});
-
-// ── Session tracking for SSE ──────────────────────────────────────────────────
-const activeSessions = new Map();
-
-const httpServerWithSessions = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://localhost`);
+  const pathname = url.pathname;
 
-  if (req.method === "GET" && url.pathname === "/health") {
-    res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ status: "ok", server: "ashi-diamonds-mcp", tools: TOOLS.length }));
+  // CORS headers (useful when called from browser-based apps)
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+
+  if (req.method === "OPTIONS") {
+    res.writeHead(204);
+    res.end();
     return;
   }
 
-  if (req.method === "GET" && url.pathname === "/sse") {
-    console.error(`[SSE] New connection`);
-    const server = createMCPServer();
+  // ── Health check ────────────────────────────────────────────────────────────
+  if (req.method === "GET" && pathname === "/health") {
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ status: "ok", server: "ashi-diamonds-mcp", tools: TOOLS.length, sessions: sessions.size }));
+    return;
+  }
+
+  // ── SSE: client connects here first ────────────────────────────────────────
+  if (req.method === "GET" && pathname === "/sse") {
+    console.error(`[SSE] New connection from ${req.socket.remoteAddress}`);
+
     const transport = new SSEServerTransport("/message", res);
-    activeSessions.set(transport.sessionId, transport);
-    res.on("close", () => {
-      activeSessions.delete(transport.sessionId);
-      console.error(`[SSE] Connection closed, session ${transport.sessionId} removed`);
+    const server = createMCPServer();
+
+    sessions.set(transport.sessionId, transport);
+    console.error(`[SSE] Session created: ${transport.sessionId}`);
+
+    req.on("close", () => {
+      sessions.delete(transport.sessionId);
+      console.error(`[SSE] Session closed: ${transport.sessionId}`);
     });
+
     await server.connect(transport);
     return;
   }
 
-  if (req.method === "POST" && url.pathname === "/message") {
+  // ── Messages: client POSTs tool calls here ─────────────────────────────────
+  if (req.method === "POST" && pathname === "/message") {
     const sessionId = url.searchParams.get("sessionId");
-    const transport = activeSessions.get(sessionId);
-    if (transport) {
-      await transport.handlePostMessage(req, res);
-    } else {
+    console.error(`[MSG] sessionId=${sessionId}`);
+
+    const transport = sessions.get(sessionId);
+    if (!transport) {
+      console.error(`[MSG] Session not found: ${sessionId}`);
       res.writeHead(404, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: "Session not found" }));
+      res.end(JSON.stringify({ error: "Session not found", sessionId }));
+      return;
     }
+
+    await transport.handlePostMessage(req, res);
     return;
   }
 
@@ -238,8 +224,8 @@ const httpServerWithSessions = http.createServer(async (req, res) => {
   res.end("Not found");
 });
 
-httpServerWithSessions.listen(PORT, "0.0.0.0", () => {
-  console.error(`Ashi Diamonds MCP server listening on http://0.0.0.0:${PORT}`);
-  console.error(`  SSE endpoint:    http://0.0.0.0:${PORT}/sse`);
-  console.error(`  Health check:    http://0.0.0.0:${PORT}/health`);
+httpServer.listen(PORT, "0.0.0.0", () => {
+  console.error(`✅ Ashi Diamonds MCP server listening on http://0.0.0.0:${PORT}`);
+  console.error(`   SSE:    http://0.0.0.0:${PORT}/sse`);
+  console.error(`   Health: http://0.0.0.0:${PORT}/health`);
 });
