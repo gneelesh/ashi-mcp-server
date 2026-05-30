@@ -13,6 +13,7 @@ services:
       - ASHI_USERNAME=avalontester1@gmail.com
       - ASHI_PASSWORD=${ASHI_PASSWORD}
       - ASHI_JEWELSOFTID=
+      - AUTH_KEY=${AUTH_KEY}
     networks:
       - mcp-network
 

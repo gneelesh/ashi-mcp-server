@@ -44,20 +44,35 @@ Defaults to port `3000`. Override with `PORT=xxxx`.
 
 Claude Desktop connects to remote MCP servers via the `mcp-remote` proxy. Add the following to your `claude_desktop_config.json`:
 
+**HTTPS (recommended):**
 ```json
 {
   "mcpServers": {
     "ashi-diamonds": {
       "command": "npx",
-      "args": ["-y", "mcp-remote", "http://<host-ip>:3030/mcp", "--allow-http"]
+      "args": ["-y", "mcp-remote", "https://ashi-mcp.hilexservices.com/mcp",
+               "--header", "Authorization: Bearer YOUR_AUTH_KEY"]
     }
   }
 }
 ```
 
-Replace `<host-ip>` with the IP address of the machine running the server (e.g. `192.168.88.151`).
+**Plain HTTP (local network only):**
+```json
+{
+  "mcpServers": {
+    "ashi-diamonds": {
+      "command": "npx",
+      "args": ["-y", "mcp-remote", "http://<host-ip>:3030/mcp",
+               "--allow-http", "--header", "Authorization: Bearer YOUR_AUTH_KEY"]
+    }
+  }
+}
+```
 
-> **Note:** `--allow-http` is required because `mcp-remote` blocks plain HTTP for non-localhost addresses by default. If you set up HTTPS on the server, you can remove this flag.
+Replace `YOUR_AUTH_KEY` with the value set in `AUTH_KEY` on the server.
+
+> **Note:** If `AUTH_KEY` is not set on the server, the `/mcp` endpoint is open to anyone. Always set it in production.
 
 `claude_desktop_config.json` is located at:
 - **Windows:** `%APPDATA%\Claude\claude_desktop_config.json`

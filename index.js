@@ -8,6 +8,7 @@ import http from "http";
 
 const BASE_URL = "https://aichatbot.ashidiamonds.com";
 const PORT = process.env.PORT || 3000;
+const AUTH_KEY = process.env.AUTH_KEY || "";
 
 const CREDENTIALS = {
   jewelerid:   process.env.ASHI_JEWELER_ID  || "CARTJA11720",
@@ -177,7 +178,7 @@ const httpServer = http.createServer(async (req, res) => {
 
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, mcp-session-id");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, mcp-session-id, Authorization");
 
   if (req.method === "OPTIONS") {
     res.writeHead(204);
@@ -192,6 +193,15 @@ const httpServer = http.createServer(async (req, res) => {
   }
 
   if (pathname === "/mcp") {
+    if (AUTH_KEY) {
+      const authHeader = req.headers["authorization"] || "";
+      if (authHeader !== `Bearer ${AUTH_KEY}`) {
+        console.error(`[AUTH] Rejected request from ${req.socket.remoteAddress}`);
+        res.writeHead(401, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Unauthorized" }));
+        return;
+      }
+    }
     console.error(`[MCP] ${req.method} from ${req.socket.remoteAddress}`);
     const body = req.method === "POST" ? await parseBody(req) : undefined;
     const server = createMCPServer();
